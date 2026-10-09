@@ -1,0 +1,984 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ماشین‌حساب مبدل حرارتی پوسته و لوله | روش ε-NTU</title>
+<style>
+  :root{
+    --bg:#0b1f2e;
+    --bg-2:#10293b;
+    --ink:#e8f1f7;
+    --muted:#9db3c3;
+    --line:#2b4a60;
+    --hot:#ff7a45;
+    --cold:#38bdf8;
+    --accent:#fbbf24;
+    --glass:rgba(255,255,255,.07);
+    --glass-strong:rgba(255,255,255,.16);
+    --font:"Vazirmatn","Vazir","Tahoma","Segoe UI",system-ui,-apple-system,sans-serif;
+  }
+  *{box-sizing:border-box}
+  html{-webkit-text-size-adjust:100%}
+  body{
+    margin:0;
+    min-height:100vh;
+    font-family:var(--font);
+    color:var(--ink);
+    background:
+      radial-gradient(1200px 600px at 85% -10%, rgba(255,122,69,.14), transparent 60%),
+      radial-gradient(1000px 600px at 5% 110%, rgba(56,189,248,.14), transparent 60%),
+      var(--bg);
+    line-height:1.7;
+  }
+  .page{max-width:1100px;margin:0 auto;padding:24px 16px 48px}
+  header h1{margin:0 0 4px;font-size:clamp(1.25rem,2.6vw,1.9rem);font-weight:800}
+  header p{margin:0;color:var(--muted);font-size:.95rem}
+  header .formula{
+    direction:ltr;display:inline-block;margin-top:8px;padding:4px 12px;
+    border:1px solid var(--line);border-radius:999px;color:var(--muted);font-size:.85rem;
+    font-family:"Cambria Math","Cambria",Georgia,serif;
+  }
+
+  /* ---------- Diagram stage ---------- */
+  .stage{
+    position:relative;
+    margin-top:20px;
+    border:1px solid var(--line);
+    border-radius:20px;
+    background:linear-gradient(180deg,var(--bg-2),#0c2232);
+    container-type:inline-size;
+    direction:ltr;               /* the drawing itself is not mirrored */
+    overflow:hidden;
+  }
+  .stage svg{display:block;width:100%;height:auto}
+  .fields{position:absolute;inset:0;pointer-events:none}
+
+  .field{
+    position:absolute;
+    pointer-events:auto;
+    display:flex;flex-direction:column;align-items:stretch;gap:.25cqw;
+    padding:.5cqw .8cqw .6cqw;
+    background:var(--glass);
+    border:1px solid rgba(255,255,255,.22);
+    border-radius:1.1cqw;
+    backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);
+    box-shadow:0 .6cqw 1.8cqw rgba(0,0,0,.28);
+    transition:background .18s,border-color .18s,box-shadow .18s,transform .18s;
+    cursor:text;
+  }
+  .field > span{
+    font-size:1.12cqw;line-height:1.2;text-align:center;color:var(--muted);
+    white-space:nowrap;
+  }
+  .field > span b{color:var(--ink);font-weight:700}
+  .field .row{display:flex;align-items:center;gap:.5cqw;direction:ltr}
+  .field.stack .row{flex-direction:column;align-items:stretch;gap:.25cqw}
+  .field input{
+    width:100%;min-width:0;flex:1 1 0;
+    font:inherit;font-size:1.5cqw;font-weight:700;line-height:1.3;
+    text-align:center;direction:ltr;
+    color:#fff;background:transparent;border:0;outline:0;padding:0;
+    -moz-appearance:textfield;appearance:textfield;
+  }
+  .field input::-webkit-outer-spin-button,
+  .field input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+  .field input::placeholder{color:rgba(255,255,255,.34);font-weight:400;font-size:1.05cqw}
+  .field:hover,
+  .field:focus-within{
+    background:var(--glass-strong);
+    border-color:var(--c,#fff);
+    box-shadow:0 0 0 .25cqw color-mix(in srgb,var(--c,#fff) 35%,transparent),0 .8cqw 2.2cqw rgba(0,0,0,.4);
+    transform:translateY(-1px);
+  }
+  .field.hot{--c:var(--hot)}
+  .field.cold{--c:var(--cold)}
+  .field.geo{--c:var(--accent)}
+  .field.hot{border-color:color-mix(in srgb,var(--hot) 55%,transparent)}
+  .field.cold{border-color:color-mix(in srgb,var(--cold) 55%,transparent)}
+  .field.geo{border-color:color-mix(in srgb,var(--accent) 55%,transparent)}
+
+  /* unit selectors (shared look) */
+  select.unit{
+    font:inherit;font-size:.8rem;line-height:1.3;
+    color:var(--ink);background:rgba(0,0,0,.30);
+    border:1px solid rgba(255,255,255,.22);border-radius:8px;
+    padding:3px 6px;cursor:pointer;direction:ltr;color-scheme:dark;
+    transition:border-color .15s,background .15s;
+  }
+  select.unit option{background:#10293b;color:#e8f1f7}
+  select.unit:hover,select.unit:focus{border-color:var(--c,#fff);background:rgba(0,0,0,.45)}
+  .field select.unit{
+    flex:0 0 auto;
+    font-size:1.1cqw;padding:.25cqw .3cqw;border-radius:.6cqw;
+  }
+
+  /* positions as % of a 1000 × 560 drawing */
+  .f-thin{left:62%;  top:2.7%;  width:16%}
+  .f-ch  {left:40%;  top:17%;   width:20%}
+  .f-tcin{left:9.5%; top:87.5%; width:16%}
+  .f-cc  {left:.5%;  top:68.5%; width:13%}
+  .f-u   {left:40%;  top:78.6%; width:24%}
+  .f-a   {left:66%;  top:73.2%; width:14%}
+
+  .flow-hot{animation:flow 1.4s linear infinite}
+  .flow-cold{animation:flow 1.1s linear infinite}
+  @keyframes flow{to{stroke-dashoffset:-44}}
+  @media (prefers-reduced-motion:reduce){.flow-hot,.flow-cold{animation:none}}
+
+  /* ---------- Legend ---------- */
+  .legend{
+    display:flex;flex-wrap:wrap;gap:8px 20px;justify-content:center;
+    margin:14px 0 0;padding:0;list-style:none;color:var(--muted);font-size:.85rem;
+  }
+  .legend li{display:flex;align-items:center;gap:8px}
+  .legend i{width:22px;height:8px;border-radius:4px;display:inline-block}
+
+  /* ---------- Actions ---------- */
+  .actions{display:flex;flex-wrap:wrap;gap:10px;justify-content:center;align-items:center;margin-top:22px}
+  .btn-main{
+    font:inherit;font-weight:800;font-size:1.1rem;color:#1a0f08;
+    padding:14px 40px;border:0;border-radius:14px;cursor:pointer;
+    background:linear-gradient(135deg,#ffb36b,var(--hot) 55%,#ff5a2a);
+    box-shadow:0 10px 28px rgba(255,122,69,.35);
+    transition:transform .15s,box-shadow .15s,filter .15s;
+  }
+  .btn-main:hover{transform:translateY(-2px);box-shadow:0 14px 34px rgba(255,122,69,.5);filter:brightness(1.05)}
+  .btn-main:active{transform:translateY(0)}
+  .btn-sub{
+    font:inherit;font-size:.9rem;color:var(--ink);cursor:pointer;
+    padding:10px 18px;border-radius:12px;background:transparent;border:1px solid var(--line);
+    transition:background .15s,border-color .15s;
+  }
+  .btn-sub:hover{background:var(--glass);border-color:var(--muted)}
+  .btn-report{
+    border-color:color-mix(in srgb,var(--cold) 70%,transparent);color:#bae6fd;font-weight:700;
+  }
+  .btn-report:hover{background:rgba(56,189,248,.14);border-color:var(--cold)}
+  button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+  .field input:focus-visible{outline:0}
+  .hint{
+    display:none;max-width:640px;margin:12px auto 0;text-align:center;
+    color:#bae6fd;font-size:.85rem;
+  }
+  .hint.show{display:block}
+
+  /* ---------- Error + results ---------- */
+  .error{
+    display:none;max-width:640px;margin:18px auto 0;padding:12px 16px;
+    border:1px solid #ef4444;border-radius:12px;background:rgba(239,68,68,.12);color:#fecaca;
+    text-align:center;
+  }
+  .error.show{display:block}
+
+  .results{
+    display:none;max-width:820px;margin:22px auto 0;padding:22px;
+    border:1px solid var(--line);border-radius:20px;
+    background:linear-gradient(180deg,rgba(255,255,255,.06),rgba(255,255,255,.02));
+    box-shadow:0 16px 40px rgba(0,0,0,.35);
+  }
+  .results.show{display:block}
+  .results h2{margin:0 0 14px;font-size:1.1rem;font-weight:800}
+  .res-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+  .res{
+    padding:14px 10px;border-radius:14px;text-align:center;
+    background:rgba(0,0,0,.22);border:1px solid var(--line);
+  }
+  .res small{display:block;color:var(--muted);font-size:.8rem}
+  .res strong{
+    display:block;direction:ltr;margin:4px 0 4px;font-size:1.55rem;font-weight:800;
+    font-variant-numeric:tabular-nums;overflow-wrap:anywhere;
+  }
+  .res select.unit{max-width:100%}
+  .res.hot{--c:var(--hot);border-color:color-mix(in srgb,var(--hot) 60%,transparent)}
+  .res.hot strong{color:var(--hot)}
+  .res.cold{--c:var(--cold);border-color:color-mix(in srgb,var(--cold) 60%,transparent)}
+  .res.cold strong{color:var(--cold)}
+  .res.q{--c:var(--accent);border-color:color-mix(in srgb,var(--accent) 60%,transparent)}
+  .res.q strong{color:var(--accent)}
+  .res.eps{--c:#a7f3d0}
+  .res.eps strong{color:#a7f3d0}
+  .extra{
+    display:flex;flex-wrap:wrap;gap:8px 22px;justify-content:center;
+    margin:14px 0 0;color:var(--muted);font-size:.85rem;direction:ltr;
+  }
+  .extra b{color:var(--ink);font-weight:600}
+
+  /* ---------- Temperature profile chart ---------- */
+  .chartbox{
+    margin-top:18px;padding:14px;border:1px solid var(--line);border-radius:16px;
+    background:rgba(0,0,0,.18);
+  }
+  .chart-head{display:flex;flex-wrap:wrap;gap:8px 16px;justify-content:space-between;align-items:center;margin-bottom:10px}
+  .chart-head h3{margin:0;font-size:1rem;font-weight:800}
+  .chart-unit{display:flex;align-items:center;gap:8px;color:var(--muted);font-size:.85rem}
+  #chart{direction:ltr}
+  #chart svg{display:block;width:100%;height:auto}
+
+  footer{margin-top:28px;text-align:center;color:var(--muted);font-size:.8rem}
+
+  /* ---------- Narrow screens: fields move under the drawing ---------- */
+  @media (max-width:900px){
+    .stage{container-type:normal}
+    .leaders{display:none}
+    .fields{
+      position:static;pointer-events:auto;
+      display:grid;grid-template-columns:repeat(2,1fr);gap:10px;
+      padding:6px 12px 16px;
+    }
+    .field{
+      position:static;width:auto;left:auto;top:auto;
+      padding:8px 10px;border-radius:14px;gap:2px;
+    }
+    .field > span{font-size:.78rem}
+    .field .row,.field.stack .row{flex-direction:row;align-items:center;gap:6px}
+    .field input{font-size:1.1rem}
+    .field input::placeholder{font-size:.8rem}
+    .field select.unit{font-size:.78rem;padding:4px 4px;border-radius:8px}
+    .field:hover,.field:focus-within{box-shadow:0 0 0 3px color-mix(in srgb,var(--c,#fff) 35%,transparent)}
+    .res-grid{grid-template-columns:repeat(2,1fr)}
+    .btn-main{width:100%}
+  }
+
+  /* ---------- Technical report (visible only when printing / saving as PDF) ---------- */
+  #report{display:none;font-family:var(--font);color:#0f172a;line-height:1.7;direction:rtl}
+  .rp-head{
+    display:flex;justify-content:space-between;align-items:center;gap:16px;
+    padding:14px 18px;border-radius:12px;background:#0b1f2e;color:#e8f1f7;
+  }
+  .rp-head h1{margin:0;font-size:18pt}
+  .rp-head p{margin:0;color:#9db3c3;font-size:10pt}
+  .rp-date{font-size:9pt;color:#9db3c3;text-align:left;direction:ltr;white-space:nowrap}
+  #report h2{font-size:12.5pt;margin:16px 0 6px;padding-right:8px;border-right:4px solid #ff7a45}
+  .rp-fig{background:#0c2232;border-radius:12px;padding:6px;break-inside:avoid;page-break-inside:avoid}
+  .rp-fig svg{display:block;width:100%;height:auto}
+  table.rp-t{width:100%;border-collapse:collapse;font-size:10pt;break-inside:avoid;page-break-inside:avoid}
+  .rp-t th,.rp-t td{border:1px solid #cbd5e1;padding:5px 8px;text-align:right}
+  .rp-t th{background:#eef3f7}
+  .rp-t td.num{direction:ltr;text-align:center;font-weight:700}
+  .rp-t td.sym{direction:ltr;text-align:center;font-family:"Cambria Math",Cambria,Georgia,serif}
+  .rp-t td.unit{direction:ltr;text-align:center}
+  .rp-form{
+    direction:ltr;text-align:left;font-family:"Cambria Math",Cambria,Georgia,serif;
+    font-size:10.5pt;background:#f1f5f9;border-radius:8px;padding:8px 12px;break-inside:avoid;
+  }
+  #report ul{margin:6px 0 0;padding-right:20px;font-size:10pt}
+  .rp-foot{margin-top:14px;font-size:8.5pt;color:#475569;border-top:1px solid #cbd5e1;padding-top:6px}
+
+  @media print{
+    @page{size:A4;margin:12mm}
+    html,body{background:#fff !important}
+    body{color:#0f172a}
+    .page{display:none !important}
+    #report{display:block}
+    *{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <header>
+    <h1>پیش‌بینی دمای خروجی مبدل حرارتی پوسته و لوله</h1>
+    <p>جریان مخالف (Counter Flow) · روش ε-NTU · مقادیر را روی دیاگرام وارد کنید.</p>
+    <span class="formula">ε = (1 − e<sup>−NTU(1−Cr)</sup>) / (1 − Cr·e<sup>−NTU(1−Cr)</sup>)</span>
+  </header>
+
+  <!-- ===== Diagram + overlaid inputs ===== -->
+  <section class="stage" aria-label="دیاگرام مبدل حرارتی و ورودی‌ها">
+    <svg viewBox="0 0 1000 560" role="img" aria-label="نمای جانبی مبدل حرارتی پوسته و لوله با جریان مخالف">
+      <defs>
+        <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+          <path d="M40 0H0V40" fill="none" stroke="#ffffff" stroke-opacity=".04" stroke-width="1"/>
+        </pattern>
+        <linearGradient id="shellG" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stop-color="#26455a"/>
+          <stop offset=".5" stop-color="#16303f"/>
+          <stop offset="1" stop-color="#26455a"/>
+        </linearGradient>
+        <linearGradient id="tubeG" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stop-color="#7dd3fc"/>
+          <stop offset=".5" stop-color="#0ea5e9"/>
+          <stop offset="1" stop-color="#0369a1"/>
+        </linearGradient>
+        <linearGradient id="headG" x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0" stop-color="#0c4a6e"/>
+          <stop offset="1" stop-color="#0e7490"/>
+        </linearGradient>
+        <linearGradient id="headGR" x1="1" y1="0" x2="0" y2="0">
+          <stop offset="0" stop-color="#0c4a6e"/>
+          <stop offset="1" stop-color="#0e7490"/>
+        </linearGradient>
+        <linearGradient id="nozHot" x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0" stop-color="#9a3412"/>
+          <stop offset=".5" stop-color="#fb923c"/>
+          <stop offset="1" stop-color="#9a3412"/>
+        </linearGradient>
+        <linearGradient id="nozCold" x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0" stop-color="#075985"/>
+          <stop offset=".5" stop-color="#38bdf8"/>
+          <stop offset="1" stop-color="#075985"/>
+        </linearGradient>
+        <marker id="arrHot" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto" markerUnits="userSpaceOnUse">
+          <path d="M0 0L8 4L0 8Z" fill="#ff7a45"/>
+        </marker>
+        <marker id="arrCold" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto" markerUnits="userSpaceOnUse">
+          <path d="M0 0L8 4L0 8Z" fill="#38bdf8"/>
+        </marker>
+        <marker id="arrGeo" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto" markerUnits="userSpaceOnUse">
+          <path d="M0 0L8 4L0 8Z" fill="#fbbf24"/>
+        </marker>
+      </defs>
+
+      <rect width="1000" height="560" fill="url(#grid)"/>
+
+      <!-- Nozzles (drawn first so shell overlaps their roots) -->
+      <g stroke="#0b1f2e" stroke-width="1.5">
+        <!-- hot in (shell, top right) -->
+        <rect x="680" y="110" width="40" height="84" fill="url(#nozHot)"/>
+        <rect x="671" y="102" width="58" height="10" rx="3" fill="#fdba74"/>
+        <!-- hot out (shell, bottom left) -->
+        <rect x="240" y="366" width="40" height="84" fill="url(#nozHot)"/>
+        <rect x="231" y="446" width="58" height="10" rx="3" fill="#fdba74"/>
+        <!-- cold in (tube side, bottom left) -->
+        <rect x="155" y="358" width="40" height="92" fill="url(#nozCold)"/>
+        <rect x="146" y="446" width="58" height="10" rx="3" fill="#7dd3fc"/>
+        <!-- cold out (tube side, top right) -->
+        <rect x="805" y="100" width="40" height="102" fill="url(#nozCold)"/>
+        <rect x="796" y="92" width="58" height="10" rx="3" fill="#7dd3fc"/>
+      </g>
+
+      <!-- Heads -->
+      <path d="M200 200H175Q150 200 150 225V335Q150 360 175 360H200Z" fill="url(#headG)" stroke="#7dd3fc" stroke-opacity=".6" stroke-width="2"/>
+      <path d="M800 200H825Q850 200 850 225V335Q850 360 825 360H800Z" fill="url(#headGR)" stroke="#7dd3fc" stroke-opacity=".6" stroke-width="2"/>
+
+      <!-- Shell -->
+      <rect x="200" y="190" width="600" height="180" rx="6" fill="url(#shellG)" stroke="#9db3c3" stroke-width="2.5"/>
+      <rect x="200" y="190" width="600" height="180" rx="6" fill="#ff7a45" opacity=".08"/>
+
+      <!-- Tubesheets -->
+      <rect x="196" y="190" width="9" height="180" fill="#9db3c3"/>
+      <rect x="795" y="190" width="9" height="180" fill="#9db3c3"/>
+
+      <!-- Tubes -->
+      <g>
+        <rect x="204" y="209" width="592" height="12" rx="6" fill="url(#tubeG)" stroke="#075985" stroke-width="1"/>
+        <rect x="204" y="241" width="592" height="12" rx="6" fill="url(#tubeG)" stroke="#075985" stroke-width="1"/>
+        <rect x="204" y="273" width="592" height="12" rx="6" fill="url(#tubeG)" stroke="#075985" stroke-width="1"/>
+        <rect x="204" y="305" width="592" height="12" rx="6" fill="url(#tubeG)" stroke="#075985" stroke-width="1"/>
+        <rect x="204" y="337" width="592" height="12" rx="6" fill="url(#tubeG)" stroke="#075985" stroke-width="1"/>
+      </g>
+      <!-- cold flow inside tubes (left → right) -->
+      <g stroke="#e0f2fe" stroke-width="2" stroke-linecap="round" stroke-dasharray="10 12" opacity=".85" class="flow-cold">
+        <line x1="210" y1="215" x2="790" y2="215"/>
+        <line x1="210" y1="247" x2="790" y2="247"/>
+        <line x1="210" y1="279" x2="790" y2="279"/>
+        <line x1="210" y1="311" x2="790" y2="311"/>
+        <line x1="210" y1="343" x2="790" y2="343"/>
+      </g>
+
+      <!-- Baffles -->
+      <g fill="#cbd5e1" stroke="#0b1f2e" stroke-width="1">
+        <rect x="316" y="190" width="9" height="150"/>
+        <rect x="456" y="220" width="9" height="150"/>
+        <rect x="596" y="190" width="9" height="150"/>
+        <rect x="736" y="220" width="9" height="150"/>
+      </g>
+
+      <!-- hot flow in shell (right → left, zig-zag around baffles) -->
+      <path class="flow-hot" d="M700 196V355H530V205H390V355H260V372"
+            fill="none" stroke="#ff7a45" stroke-width="3.5" stroke-linejoin="round"
+            stroke-linecap="round" stroke-dasharray="9 11" opacity=".95"/>
+
+      <!-- Flow arrows at the ports -->
+      <g stroke="#0b1f2e" stroke-width="1">
+        <polygon points="691,128 709,128 700,150" fill="#fff"/>
+        <polygon points="251,404 269,404 260,426" fill="#fff"/>
+        <polygon points="166,420 184,420 175,398" fill="#fff"/>
+        <polygon points="816,150 834,150 825,128" fill="#fff"/>
+      </g>
+
+      <!-- Leader lines from the input boxes to the exchanger -->
+      <g class="leaders" fill="none" stroke-width="2" stroke-linecap="round">
+        <path d="M700 66V99"  stroke="#ff7a45" marker-end="url(#arrHot)"/>
+        <path d="M600 119H668" stroke="#ff7a45" marker-end="url(#arrHot)"/>
+        <path d="M175 488V460" stroke="#38bdf8" marker-end="url(#arrCold)"/>
+        <path d="M135 419H143" stroke="#38bdf8" marker-end="url(#arrCold)"/>
+        <path d="M520 438V376" stroke="#fbbf24" marker-end="url(#arrGeo)"/>
+        <path d="M720 408V352" stroke="#fbbf24" marker-end="url(#arrGeo)"/>
+      </g>
+
+      <!-- Live outlet read-outs -->
+      <g font-family="Vazirmatn, Tahoma, 'Segoe UI', sans-serif" font-weight="700">
+        <text x="300" y="418" font-size="15" fill="#fdba74">Th_out</text>
+        <text id="svgTho" x="300" y="440" font-size="19" fill="#ff7a45">—</text>
+        <text x="862" y="130" font-size="15" fill="#7dd3fc">Tc_out</text>
+        <text id="svgTco" x="862" y="152" font-size="19" fill="#38bdf8">—</text>
+      </g>
+    </svg>
+
+    <div class="fields">
+      <label class="field hot f-thin">
+        <span><b>Th_in</b> · دمای ورودی گرم</span>
+        <div class="row">
+          <input id="Th_in" type="number" inputmode="decimal" step="any" placeholder="">
+          <select class="unit" id="u_Th_in" data-group="T" aria-label="واحد Th_in"></select>
+        </div>
+      </label>
+      <label class="field hot f-ch">
+        <span><b>Ch</b> · ظرفیت حرارتی گرم</span>
+        <div class="row">
+          <input id="Ch" type="number" inputmode="decimal" step="any" min="0" placeholder="">
+          <select class="unit" id="u_Ch" data-group="C" aria-label="واحد Ch"></select>
+        </div>
+      </label>
+      <label class="field cold f-tcin">
+        <span><b>Tc_in</b> · دمای ورودی سرد</span>
+        <div class="row">
+          <input id="Tc_in" type="number" inputmode="decimal" step="any" placeholder="">
+          <select class="unit" id="u_Tc_in" data-group="T" aria-label="واحد Tc_in"></select>
+        </div>
+      </label>
+      <label class="field cold stack f-cc">
+        <span><b>Cc</b> · ظرفیت حرارتی سرد</span>
+        <div class="row">
+          <input id="Cc" type="number" inputmode="decimal" step="any" min="0" placeholder="">
+          <select class="unit" id="u_Cc" data-group="C" aria-label="واحد Cc"></select>
+        </div>
+      </label>
+      <label class="field geo f-u">
+        <span><b>U</b> · ضریب کلی انتقال حرارت</span>
+        <div class="row">
+          <input id="U" type="number" inputmode="decimal" step="any" min="0" placeholder="">
+          <select class="unit" id="u_U" data-group="U" aria-label="واحد U"></select>
+        </div>
+      </label>
+      <label class="field geo f-a">
+        <span><b>A</b> · سطح انتقال</span>
+        <div class="row">
+          <input id="A" type="number" inputmode="decimal" step="any" min="0" placeholder="">
+          <select class="unit" id="u_A" data-group="A" aria-label="واحد A"></select>
+        </div>
+      </label>
+    </div>
+  </section>
+
+  <ul class="legend" aria-label="راهنمای رنگ‌ها">
+    <li><i style="background:var(--hot)"></i>سیال گرم (سمت پوسته)</li>
+    <li><i style="background:var(--cold)"></i>سیال سرد (داخل لوله‌ها)</li>
+    <li><i style="background:#cbd5e1"></i>بافل‌ها</li>
+    <li><i style="background:var(--accent)"></i>پارامترهای هندسی و انتقال حرارت (U، A)</li>
+  </ul>
+
+  <div class="actions">
+    <button class="btn-main" id="calcBtn" type="button">محاسبه دماهای خروجی</button>
+    <button class="btn-sub btn-report" id="reportBtn" type="button">دانلود گزارش فنی</button>
+    <button class="btn-sub" id="exampleBtn" type="button">بارگذاری مثال</button>
+    <button class="btn-sub" id="resetBtn" type="button">پاک‌سازی</button>
+  </div>
+  <div class="hint" id="hint" aria-live="polite">پنجره‌ی چاپ مرورگر باز شد؛ مقصد را روی «Save as PDF» (ذخیره به‌صورت PDF) بگذارید.</div>
+
+  <div class="error" id="error" role="alert" aria-live="assertive"></div>
+
+  <section class="results" id="results" aria-live="polite">
+    <h2>نتایج محاسبه</h2>
+    <div class="res-grid">
+      <div class="res hot"><small>Th_out · دمای خروجی گرم</small><strong id="rTho">—</strong><select class="unit" id="u_Tho" data-group="T" aria-label="واحد Th_out"></select></div>
+      <div class="res cold"><small>Tc_out · دمای خروجی سرد</small><strong id="rTco">—</strong><select class="unit" id="u_Tco" data-group="T" aria-label="واحد Tc_out"></select></div>
+      <div class="res q"><small>q_actual · نرخ انتقال حرارت</small><strong id="rQ">—</strong><select class="unit" id="u_Q" data-group="Q" data-default="kW" aria-label="واحد q_actual"></select></div>
+      <div class="res eps"><small>ε · بازدهی مبدل</small><strong id="rEps">—</strong><select class="unit" id="u_Eps" data-group="E" aria-label="واحد ε"></select></div>
+    </div>
+    <div class="extra">
+      <span>NTU = <b id="xNtu">—</b></span>
+      <span>Cr = <b id="xCr">—</b></span>
+      <span>C_min = <b id="xCmin">—</b> <span id="xCminU">W/K</span></span>
+      <span>q_max = <b id="xQmax">—</b> <span id="xQmaxU">kW</span></span>
+    </div>
+
+    <div class="chartbox">
+      <div class="chart-head">
+        <h3>پروفایل دما در طول مبدل</h3>
+        <label class="chart-unit">واحد دما
+          <select class="unit" id="u_chart" data-group="T" aria-label="واحد دمای نمودار"></select>
+        </label>
+      </div>
+      <div id="chart"></div>
+    </div>
+  </section>
+
+  <footer>فرض‌ها: جریان مخالف، خواص ثابت، U ثابت در طول مبدل، بدون اتلاف حرارت به محیط و بدون تغییر فاز.</footer>
+</div>
+
+<!-- Technical report: filled by JavaScript, shown only when printing / saving as PDF -->
+<div id="report" dir="rtl"></div>
+
+<script>
+(function () {
+  'use strict';
+
+  var $ = function (id) { return document.getElementById(id); };
+  var ids = ['Th_in', 'Tc_in', 'Ch', 'Cc', 'U', 'A'];
+
+  /* =====================================================================
+     Units. Every group converts to / from one SI base unit:
+       T → K,  C (heat-capacity rate) → W/K,  U → W/(m²·K),
+       A → m², Q → W, E (effectiveness) → fraction
+     Factors use the International Table definitions
+       1 kcal_IT/h = 1.163 W        1 BTU_IT/h = 0.29307107 W
+       1 ft = 0.3048 m              1 in = 0.0254 m
+     ===================================================================== */
+  function lin(k, label, f, dec) {
+    return { k: k, label: label, dec: dec,
+             to: function (v) { return v * f; },
+             from: function (v) { return v / f; } };
+  }
+  var UNITS = {
+    T: [
+      { k: 'C', label: '°C', dec: 2,
+        to: function (v) { return v + 273.15; }, from: function (v) { return v - 273.15; } },
+      { k: 'K', label: 'K', dec: 2,
+        to: function (v) { return v; }, from: function (v) { return v; } },
+      { k: 'F', label: '°F', dec: 2,
+        to: function (v) { return (v - 32) * 5 / 9 + 273.15; },
+        from: function (v) { return (v - 273.15) * 9 / 5 + 32; } }
+    ],
+    C: [
+      lin('W/K', 'W/K', 1, 1),
+      lin('kW/K', 'kW/K', 1000, 3),
+      lin('kcal/hK', 'kcal/(h·K)', 1.163, 1),
+      lin('BTU/hF', 'BTU/(h·°F)', 0.5275279, 1)
+    ],
+    U: [
+      lin('W/m2K', 'W/(m²·K)', 1, 2),
+      lin('kW/m2K', 'kW/(m²·K)', 1000, 4),
+      lin('kcal/hm2K', 'kcal/(h·m²·K)', 1.163, 2),
+      lin('BTU/hft2F', 'BTU/(h·ft²·°F)', 5.678263, 2)
+    ],
+    A: [
+      lin('m2', 'm²', 1, 3),
+      lin('cm2', 'cm²', 1e-4, 1),
+      lin('ft2', 'ft²', 0.09290304, 2),
+      lin('in2', 'in²', 0.00064516, 1)
+    ],
+    Q: [
+      lin('W', 'W', 1, 0),
+      lin('kW', 'kW', 1000, 2),
+      lin('MW', 'MW', 1e6, 4),
+      lin('kcal/h', 'kcal/h', 1.163, 0),
+      lin('BTU/h', 'BTU/h', 0.29307107, 0)
+    ],
+    E: [
+      lin('frac', 'اعشار (−)', 1, 4),
+      lin('pct', 'درصد (%)', 0.01, 2)
+    ]
+  };
+  var GROUP = { Th_in: 'T', Tc_in: 'T', Ch: 'C', Cc: 'C', U: 'U', A: 'A' };
+  var LABEL_SYM = { Th_in: 'Th_in', Tc_in: 'Tc_in', Ch: 'Ch', Cc: 'Cc', U: 'U', A: 'A' };
+
+  // Example values (SI) – used for the example button and the placeholders
+  var EX = { Th_in: 423.15, Tc_in: 303.15, Ch: 2000, Cc: 3000, U: 250, A: 30 };
+
+  // The exact value of every input in SI, kept so repeated unit switching never drifts
+  var canon = { Th_in: null, Tc_in: null, Ch: null, Cc: null, U: null, A: null };
+  var last = null;   // last successful calculation (SI)
+
+  function unitOf(sel) {
+    var list = UNITS[sel.dataset.group];
+    for (var i = 0; i < list.length; i++) { if (list[i].k === sel.value) return list[i]; }
+    return list[0];
+  }
+  function inUnit(id) { return unitOf($('u_' + id)); }
+
+  function clean(x) { return String(+x.toPrecision(8)); }
+  function fmt(x, d) {
+    return x.toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d });
+  }
+  function fmtFree(x) {
+    return (+x.toPrecision(8)).toLocaleString('en-US', { maximumFractionDigits: 6 });
+  }
+
+  // fill every <select data-group>
+  Array.prototype.forEach.call(document.querySelectorAll('select.unit[data-group]'), function (sel) {
+    var list = UNITS[sel.dataset.group];
+    list.forEach(function (u) {
+      var o = document.createElement('option');
+      o.value = u.k; o.textContent = u.label;
+      sel.appendChild(o);
+    });
+    if (sel.dataset['default']) sel.value = sel.dataset['default'];
+  });
+
+  function updatePlaceholders() {
+    ids.forEach(function (id) {
+      var u = inUnit(id);
+      $(id).placeholder = 'مثلاً ' + clean(u.from(EX[id]));
+    });
+  }
+
+  /* ---------- messages ---------- */
+  function showError(msg) {
+    var e = $('error');
+    e.textContent = msg;
+    e.classList.add('show');
+    $('results').classList.remove('show');
+  }
+  function clearError() { $('error').classList.remove('show'); }
+
+  /* ---------- epsilon-NTU, counter flow (SI units) ---------- */
+  function epsilonNTUCounterFlow(Th_in, Tc_in, Ch, Cc, U, A) {
+    // Step 1: capacity rates
+    var C_min = Math.min(Ch, Cc);
+    var C_max = Math.max(Ch, Cc);
+    var Cr = C_min / C_max;
+
+    // Step 2: NTU and maximum heat transfer
+    var NTU = (U * A) / C_min;
+    var q_max = C_min * (Th_in - Tc_in);
+
+    // Step 3: effectiveness (Cr = 1 handled with a small tolerance)
+    var epsilon;
+    if (Cr < 1 - 1e-9) {
+      var E = Math.exp(-NTU * (1 - Cr));
+      epsilon = (1 - E) / (1 - Cr * E);
+    } else {
+      epsilon = NTU / (1 + NTU);
+    }
+
+    // Step 4: actual heat transfer and outlet temperatures
+    var q_actual = epsilon * q_max;
+    var Th_out = Th_in - q_actual / Ch;
+    var Tc_out = Tc_in + q_actual / Cc;
+
+    return { C_min: C_min, C_max: C_max, Cr: Cr, NTU: NTU, q_max: q_max,
+             epsilon: epsilon, q_actual: q_actual, Th_out: Th_out, Tc_out: Tc_out };
+  }
+
+  /* ---------- rendering of outputs in the selected units ---------- */
+  function renderOutputs() {
+    if (!last) return;
+    var r = last.r;
+    var uTh = unitOf($('u_Tho')), uTc = unitOf($('u_Tco'));
+    var uQ = unitOf($('u_Q')), uE = unitOf($('u_Eps'));
+    var uC = inUnit('Ch');
+
+    $('rTho').textContent = fmt(uTh.from(r.Th_out), uTh.dec);
+    $('rTco').textContent = fmt(uTc.from(r.Tc_out), uTc.dec);
+    $('rQ').textContent = fmt(uQ.from(r.q_actual), uQ.dec);
+    $('rEps').textContent = fmt(uE.from(r.epsilon), uE.dec);
+
+    $('xNtu').textContent = fmt(r.NTU, 3);
+    $('xCr').textContent = fmt(r.Cr, 3);
+    $('xCmin').textContent = fmt(uC.from(r.C_min), uC.dec);
+    $('xCminU').textContent = uC.label;
+    $('xQmax').textContent = fmt(uQ.from(r.q_max), uQ.dec);
+    $('xQmaxU').textContent = uQ.label;
+
+    $('svgTho').textContent = fmt(uTh.from(r.Th_out), 1) + ' ' + uTh.label;
+    $('svgTco').textContent = fmt(uTc.from(r.Tc_out), 1) + ' ' + uTc.label;
+
+    drawChart();
+  }
+
+  /* ---------- temperature profile along the exchanger ----------
+     x/L = 0 at the hot-fluid inlet, x/L = 1 at the cold-fluid inlet.
+     With constant U:  Δ(ξ) = Th − Tc = Δ0·exp(−k·ξ),  k = UA(1/Ch − 1/Cc),
+     heat exchanged between 0 and ξ:  Q(ξ) = UA·Δ0·(1 − e^(−kξ))/k
+     Th(ξ) = Th_in − Q/Ch ,  Tc(ξ) = Tc_out − Q/Cc                         */
+  function niceTicks(min, max, count) {
+    var span = max - min;
+    var step = Math.pow(10, Math.floor(Math.log10(span / count)));
+    var err = span / count / step;
+    if (err >= 7.5) step *= 10; else if (err >= 3.5) step *= 5; else if (err >= 1.5) step *= 2;
+    var t = [];
+    for (var v = Math.ceil(min / step) * step; v <= max + step * 1e-6; v += step) t.push(+v.toFixed(10));
+    var dec = Math.min(6, Math.max(0, -Math.floor(Math.log10(step) + 1e-9)));
+    return { ticks: t, dec: dec };
+  }
+
+  function drawChart() {
+    var box = $('chart');
+    if (!last) { box.innerHTML = ''; return; }
+    var u = unitOf($('u_chart')), r = last.r, I = last.inp;
+    var d0 = I.Th_in - r.Tc_out;
+    var UA = I.U * I.A;
+    var k = UA * (1 / I.Ch - 1 / I.Cc);
+    var N = 100, hot = [], cold = [], lo = Infinity, hi = -Infinity, i;
+
+    for (i = 0; i <= N; i++) {
+      var xi = i / N, Q;
+      if (Math.abs(k) < 1e-12) Q = UA * d0 * xi;
+      else Q = UA * d0 * (-Math.expm1(-k * xi)) / k;
+      if (!isFinite(Q)) Q = (xi === 0) ? 0 : r.q_actual;
+      var th = u.from(I.Th_in - Q / I.Ch);
+      var tc = u.from(r.Tc_out - Q / I.Cc);
+      hot.push(th); cold.push(tc);
+      lo = Math.min(lo, th, tc); hi = Math.max(hi, th, tc);
+    }
+
+    var W = 640, H = 340, PL = 64, PR = 26, PT = 40, PB = 58;
+    var pw = W - PL - PR, ph = H - PT - PB;
+    var pad = (hi - lo) * 0.14;
+    var ylo = lo - pad, yhi = hi + pad;
+    var X = function (xi) { return PL + xi * pw; };
+    var Y = function (t) { return PT + (yhi - t) / (yhi - ylo) * ph; };
+
+    var s = '<svg viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="نمودار دمای سیال گرم و سرد در طول مبدل" ' +
+            'font-family="Vazirmatn, Tahoma, \'Segoe UI\', sans-serif">';
+    s += '<rect width="' + W + '" height="' + H + '" rx="14" fill="#0c2232" stroke="#2b4a60"/>';
+
+    // horizontal grid + y ticks
+    var yt = niceTicks(ylo, yhi, 5);
+    yt.ticks.forEach(function (t) {
+      var y = Y(t);
+      s += '<line x1="' + PL + '" y1="' + y.toFixed(1) + '" x2="' + (W - PR) + '" y2="' + y.toFixed(1) + '" stroke="#ffffff" stroke-opacity=".10"/>';
+      s += '<text x="' + (PL - 8) + '" y="' + (y + 4).toFixed(1) + '" font-size="11" fill="#9db3c3" text-anchor="end">' + t.toFixed(yt.dec) + '</text>';
+    });
+    // vertical grid + x ticks
+    [0, 0.25, 0.5, 0.75, 1].forEach(function (xi) {
+      var x = X(xi);
+      s += '<line x1="' + x.toFixed(1) + '" y1="' + PT + '" x2="' + x.toFixed(1) + '" y2="' + (H - PB) + '" stroke="#ffffff" stroke-opacity=".07"/>';
+      s += '<text x="' + x.toFixed(1) + '" y="' + (H - PB + 17) + '" font-size="11" fill="#9db3c3" text-anchor="middle">' + xi + '</text>';
+    });
+    // axes
+    s += '<line x1="' + PL + '" y1="' + (H - PB) + '" x2="' + (W - PR) + '" y2="' + (H - PB) + '" stroke="#9db3c3" stroke-width="1.5"/>';
+    s += '<line x1="' + PL + '" y1="' + PT + '" x2="' + PL + '" y2="' + (H - PB) + '" stroke="#9db3c3" stroke-width="1.5"/>';
+    s += '<text x="' + X(0).toFixed(1) + '" y="' + (H - PB + 32) + '" font-size="10.5" fill="#fdba74" text-anchor="start">ورودی گرم</text>';
+    s += '<text x="' + X(1).toFixed(1) + '" y="' + (H - PB + 32) + '" font-size="10.5" fill="#7dd3fc" text-anchor="end">ورودی سرد</text>';
+    s += '<text x="' + (PL + pw / 2) + '" y="' + (H - 8) + '" font-size="12" fill="#cbd5e1" text-anchor="middle">x / L  (طول بی‌بعد مبدل در راستای جریان سیال گرم)</text>';
+    var my = PT + ph / 2;
+    s += '<text transform="rotate(-90 16 ' + my + ')" x="16" y="' + my + '" font-size="12" fill="#cbd5e1" text-anchor="middle">T  (' + u.label + ')</text>';
+
+    // curves
+    function path(arr) {
+      var d = '';
+      for (var j = 0; j <= N; j++) d += (j ? 'L' : 'M') + X(j / N).toFixed(1) + ' ' + Y(arr[j]).toFixed(1);
+      return d;
+    }
+    s += '<path d="' + path(cold) + '" fill="none" stroke="#38bdf8" stroke-width="3" stroke-linejoin="round"/>';
+    s += '<path d="' + path(hot) + '" fill="none" stroke="#ff7a45" stroke-width="3" stroke-linejoin="round"/>';
+
+    // end points + labels
+    function pt(xi, t, color, name, dy, anchor, dx) {
+      var x = X(xi), y = Y(t);
+      var out = '<circle cx="' + x.toFixed(1) + '" cy="' + y.toFixed(1) + '" r="5" fill="' + color + '" stroke="#0c2232" stroke-width="2"/>';
+      out += '<text x="' + (x + dx).toFixed(1) + '" y="' + (y + dy).toFixed(1) + '" font-size="12" font-weight="700" fill="' + color +
+             '" text-anchor="' + anchor + '" stroke="#0c2232" stroke-width="3" paint-order="stroke">' +
+             name + ' = ' + fmt(t, 1) + ' ' + u.label + '</text>';
+      return out;
+    }
+    s += pt(0, hot[0],   '#ff7a45', 'Th,in',  -10, 'start',  10);
+    s += pt(0, cold[0],  '#38bdf8', 'Tc,out',  20, 'start',  10);
+    s += pt(1, hot[N],   '#ff7a45', 'Th,out', -10, 'end',   -10);
+    s += pt(1, cold[N],  '#38bdf8', 'Tc,in',   20, 'end',   -10);
+
+    // legend
+    s += '<line x1="' + (PL + 6) + '" y1="20" x2="' + (PL + 32) + '" y2="20" stroke="#ff7a45" stroke-width="3"/>';
+    s += '<text x="' + (PL + 38) + '" y="24" font-size="12" fill="#e8f1f7">سیال گرم (پوسته)</text>';
+    s += '<line x1="' + (PL + 150) + '" y1="20" x2="' + (PL + 176) + '" y2="20" stroke="#38bdf8" stroke-width="3"/>';
+    s += '<text x="' + (PL + 182) + '" y="24" font-size="12" fill="#e8f1f7">سیال سرد (لوله‌ها)</text>';
+
+    s += '</svg>';
+    box.innerHTML = s;
+  }
+
+  /* ---------- main calculation ---------- */
+  function calculate() {
+    var i, id;
+    for (i = 0; i < ids.length; i++) {
+      id = ids[i];
+      var raw = $(id).value.trim();
+      if (raw === '') { showError('همه‌ی شش مقدار ورودی را وارد کنید. «' + id + '» خالی است.'); $(id).focus(); return false; }
+      if (canon[id] === null || !isFinite(canon[id])) { showError('مقدار «' + id + '» عدد معتبر نیست.'); $(id).focus(); return false; }
+    }
+    var v = {};
+    ids.forEach(function (k) { v[k] = canon[k]; });
+
+    if (v.Th_in < 0) { showError('«Th_in» پایین‌تر از صفر مطلق است.'); $('Th_in').focus(); return false; }
+    if (v.Tc_in < 0) { showError('«Tc_in» پایین‌تر از صفر مطلق است.'); $('Tc_in').focus(); return false; }
+    var positives = ['Ch', 'Cc', 'U', 'A'];
+    for (var j = 0; j < positives.length; j++) {
+      if (v[positives[j]] <= 0) { showError('«' + positives[j] + '» باید بزرگ‌تر از صفر باشد.'); $(positives[j]).focus(); return false; }
+    }
+    if (v.Th_in <= v.Tc_in) {
+      showError('دمای ورودی گرم (Th_in) باید بیشتر از دمای ورودی سرد (Tc_in) باشد.');
+      $('Th_in').focus();
+      return false;
+    }
+
+    clearError();
+    last = { inp: v, r: epsilonNTUCounterFlow(v.Th_in, v.Tc_in, v.Ch, v.Cc, v.U, v.A) };
+    renderOutputs();
+
+    var box = $('results');
+    box.classList.add('show');
+    box.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    return true;
+  }
+
+  function reset() {
+    ids.forEach(function (id) { $(id).value = ''; canon[id] = null; });
+    last = null;
+    ['rTho', 'rTco', 'rQ', 'rEps', 'xNtu', 'xCr', 'xCmin', 'xQmax'].forEach(function (id) { $(id).textContent = '—'; });
+    $('svgTho').textContent = '—';
+    $('svgTco').textContent = '—';
+    $('chart').innerHTML = '';
+    $('results').classList.remove('show');
+    $('hint').classList.remove('show');
+    clearError();
+    $('Th_in').focus();
+  }
+
+  function loadExample() {
+    ids.forEach(function (id) {
+      canon[id] = EX[id];
+      $(id).value = clean(inUnit(id).from(EX[id]));
+    });
+    clearError();
+  }
+
+  /* ---------- events ---------- */
+  ids.forEach(function (id) {
+    var el = $(id);
+    el.addEventListener('input', function () {
+      var t = el.value.trim(), n = parseFloat(t);
+      canon[id] = (t !== '' && isFinite(n)) ? inUnit(id).to(n) : null;
+    });
+    el.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); calculate(); } });
+    // changing the unit converts the number that is already typed
+    $('u_' + id).addEventListener('change', function () {
+      if (canon[id] !== null && $(id).value.trim() !== '') {
+        $(id).value = clean(inUnit(id).from(canon[id]));
+      }
+      updatePlaceholders();
+      if (last) renderOutputs();   // C_min label follows the Ch unit
+    });
+  });
+  ['u_Tho', 'u_Tco', 'u_Q', 'u_Eps', 'u_chart'].forEach(function (sid) {
+    $(sid).addEventListener('change', renderOutputs);
+  });
+
+  /* =====================================================================
+     Technical report  (built from the current results, then printed;
+     "Save as PDF" in the print dialog produces the PDF file)
+     ===================================================================== */
+  var SVGNS = 'http://www.w3.org/2000/svg';
+
+  function uniqueIds(markup) {
+    var found = [];
+    markup.replace(/id="([^"]+)"/g, function (m, i) { found.push(i); return m; });
+    found.forEach(function (i) {
+      markup = markup.split('id="' + i + '"').join('id="' + i + '-rp"')
+                     .split('url(#' + i + ')').join('url(#' + i + '-rp)');
+    });
+    return markup;
+  }
+
+  function diagramMarkup() {
+    var svg = document.querySelector('.stage svg').cloneNode(true);
+    var g = document.createElementNS(SVGNS, 'g');
+    g.setAttribute('font-family', "Vazirmatn, Tahoma, 'Segoe UI', sans-serif");
+    g.setAttribute('font-weight', '700');
+    g.setAttribute('font-size', '16');
+    function add(x, y, anchor, color, id) {
+      var t = document.createElementNS(SVGNS, 'text');
+      t.setAttribute('x', x); t.setAttribute('y', y);
+      t.setAttribute('text-anchor', anchor); t.setAttribute('fill', color);
+      t.textContent = LABEL_SYM[id] + ' = ' + fmtFree(inUnit(id).from(canon[id])) + ' ' + inUnit(id).label;
+      g.appendChild(t);
+    }
+    add(700, 52, 'middle', '#ffb089', 'Th_in');
+    add(596, 124, 'end', '#ffb089', 'Ch');
+    add(175, 510, 'middle', '#9fdcfb', 'Tc_in');
+    add(131, 424, 'end', '#9fdcfb', 'Cc');
+    add(520, 460, 'middle', '#fde08a', 'U');
+    add(720, 430, 'middle', '#fde08a', 'A');
+    svg.appendChild(g);
+    return uniqueIds(svg.outerHTML);
+  }
+
+  function buildReport() {
+    var r = last.r;
+    var uTh = unitOf($('u_Tho')), uTc = unitOf($('u_Tco'));
+    var uQ = unitOf($('u_Q')), uE = unitOf($('u_Eps')), uC = inUnit('Ch');
+    var when;
+    try { when = new Date().toLocaleString('fa-IR', { dateStyle: 'medium', timeStyle: 'short' }); }
+    catch (e) { when = new Date().toLocaleString(); }
+
+    var inputRows = [
+      ['Th_in', 'دمای ورودی سیال گرم'],
+      ['Tc_in', 'دمای ورودی سیال سرد'],
+      ['Ch', 'نرخ ظرفیت حرارتی سیال گرم'],
+      ['Cc', 'نرخ ظرفیت حرارتی سیال سرد'],
+      ['U', 'ضریب کلی انتقال حرارت'],
+      ['A', 'سطح انتقال حرارت']
+    ].map(function (x) {
+      var u = inUnit(x[0]);
+      return '<tr><td class="sym">' + x[0] + '</td><td>' + x[1] + '</td><td class="num">' +
+             fmtFree(u.from(canon[x[0]])) + '</td><td class="unit">' + u.label + '</td></tr>';
+    }).join('');
+
+    function row(sym, desc, val, unit) {
+      return '<tr><td class="sym">' + sym + '</td><td>' + desc + '</td><td class="num">' + val +
+             '</td><td class="unit">' + unit + '</td></tr>';
+    }
+    var resRows =
+      row('Th_out', 'دمای خروجی سیال گرم', fmt(uTh.from(r.Th_out), uTh.dec), uTh.label) +
+      row('Tc_out', 'دمای خروجی سیال سرد', fmt(uTc.from(r.Tc_out), uTc.dec), uTc.label) +
+      row('q_actual', 'نرخ انتقال حرارت واقعی', fmt(uQ.from(r.q_actual), uQ.dec), uQ.label) +
+      row('ε', 'بازدهی مبدل', fmt(uE.from(r.epsilon), uE.dec), uE.label) +
+      row('NTU', 'تعداد واحدهای انتقال', fmt(r.NTU, 3), '—') +
+      row('Cr', 'نسبت ظرفیت‌ها (C_min / C_max)', fmt(r.Cr, 3), '—') +
+      row('C_min', 'کمترین نرخ ظرفیت حرارتی', fmt(uC.from(r.C_min), uC.dec), uC.label) +
+      row('q_max', 'بیشینه‌ی انتقال حرارت ممکن', fmt(uQ.from(r.q_max), uQ.dec), uQ.label);
+
+    var chartSvg = uniqueIds($('chart').innerHTML);
+
+    $('report').innerHTML =
+      '<div class="rp-head"><div><h1>گزارش فنی مبدل حرارتی پوسته و لوله</h1>' +
+      '<p>جریان مخالف (Counter Flow) · روش ε-NTU</p></div><div class="rp-date">' + when + '</div></div>' +
+
+      '<h2>۱. دیاگرام و شرایط ورودی</h2>' +
+      '<div class="rp-fig">' + diagramMarkup() + '</div>' +
+
+      '<h2>۲. مقادیر ورودی</h2>' +
+      '<table class="rp-t"><thead><tr><th>نماد</th><th>شرح</th><th>مقدار</th><th>واحد</th></tr></thead><tbody>' +
+      inputRows + '</tbody></table>' +
+
+      '<h2>۳. نتایج محاسبه</h2>' +
+      '<table class="rp-t"><thead><tr><th>نماد</th><th>شرح</th><th>مقدار</th><th>واحد</th></tr></thead><tbody>' +
+      resRows + '</tbody></table>' +
+
+      '<h2>۴. پروفایل دما در طول مبدل</h2>' +
+      '<div class="rp-fig">' + chartSvg + '</div>' +
+
+      '<h2>۵. روش محاسبه و فرض‌ها</h2>' +
+      '<div class="rp-form">C_min = min(Ch, Cc), C_max = max(Ch, Cc), Cr = C_min / C_max<br>' +
+      'NTU = U·A / C_min, q_max = C_min·(Th_in − Tc_in)<br>' +
+      'ε = [1 − exp(−NTU(1−Cr))] / [1 − Cr·exp(−NTU(1−Cr))]  (Cr &lt; 1),  ε = NTU / (1 + NTU)  (Cr = 1)<br>' +
+      'q = ε·q_max, Th_out = Th_in − q/Ch, Tc_out = Tc_in + q/Cc</div>' +
+      '<ul><li>جریان مخالف، خواص سیالات ثابت و U ثابت در طول مبدل.</li>' +
+      '<li>بدون اتلاف حرارت به محیط و بدون تغییر فاز.</li>' +
+      '<li>در نمودار، x/L = 0 ورودی سیال گرم و x/L = 1 ورودی سیال سرد است.</li></ul>' +
+      '<div class="rp-foot">این گزارش به‌صورت خودکار از ماشین‌حساب مبدل حرارتی تولید شده است. مقادیر بر اساس واحدهای انتخاب‌شده در صفحه نمایش داده شده‌اند.</div>';
+  }
+
+  var oldTitle = document.title;
+  function downloadReport() {
+    if (!calculate()) return;
+    buildReport();
+    $('hint').classList.add('show');
+    document.title = 'Heat-Exchanger-Technical-Report';
+    setTimeout(function () { window.print(); }, 80);
+  }
+  window.addEventListener('afterprint', function () { document.title = oldTitle; });
+
+  $('calcBtn').addEventListener('click', calculate);
+  $('reportBtn').addEventListener('click', downloadReport);
+  $('resetBtn').addEventListener('click', reset);
+  $('exampleBtn').addEventListener('click', loadExample);
+
+  updatePlaceholders();
+})();
+</script>
+</body>
+</html>
